@@ -1,0 +1,77 @@
+---
+title: "SGN Air Quality 2017"
+author: "markdroes@gmail.com"
+date: "February 1, 2018"
+output: pdf_document
+---
+
+*data was obtained through the US EPA (https://airnow.gov/index.cfm?action=airnow.global_summary#Vietnam$Ho_Chi_Minh_City)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Packages
+options(repos=structure(c(cran="https://ftp.osuosl.org/pub/cran/")))  
+packages <- c("TSA", "imputeTS") 
+if (length(setdiff(packages, rownames(installed.packages()))) > 0) {
+  install.packages(setdiff(packages, rownames(installed.packages())))  
+}  
+lapply(packages, require, character.only=TRUE)
+
+#Set filename
+file2016<-"c:/Users/Mark/Documents/CSV/HoChiMinhCity_PM2.5_2016_YTD.CSV"
+file2017<-"c:/Users/Mark/Documents/CSV/HoChiMinhCity_PM2.5_2017_YTD.CSV"
+file2018<-"c:/Users/Mark/Documents/CSV/HoChiMinhCity_PM2.5_2018_YTD.CSV"
+```
+
+```{r}
+#Reading in the 2017 hourly data
+data.2016<-read.csv(file2016, sep = ';')[,c(3,8,9,11)]
+data.2017<-read.csv(file2017)[,c(3,9,10,11)]
+data.2018<-read.csv(file2018)[,c(3,9,10,11)]
+#the 2016 data set is missing 743 obs. from 12/2016
+dec.2016<-matrix(rep(c("2016-01",-999,-999,-999),743),nrow = 743, ncol = 4, byrow = T,
+                 dimnames = list(c() , c("Date..LT.","AQI","AQI.Category","Raw.Conc.")))
+#Bind data together row wise
+data<-rbind(data.2016,dec.2016,data.2017,data.2018)
+
+#Data diagnostics on data$AQI
+sum(data$AQI <0)
+#1213 points with negative AQI (value actually -999), clearly errors.
+#only 7% missing data, so we're doing well here
+#Will impute values using 'imputeTS' pkg
+
+#First step, set -999 to NuLL so the values are missing:
+data$AQI[data$AQI == -999] <- NA
+data$Raw.Conc.[data$Raw.Conc. == -999] <- NA
+
+#Next, turn the data into a TS object to make it useable with 'imputeTS'
+#tsdata<-ts(data[,c(2,4)], frequency = 8760, start = 998)
+#Finally, the imputation
+#imputed<-na.kalman(tsdata, model = "auto.arima")
+
+#write.csv(imputed, file = "sgn_air_imputed.CSV")
+
+```
+
+First, let's a basic breakdown of the data.  How many hours (data points) occured in 2017 where the air quality was "unhealthy for sensitive groups" or higher?
+
+```{r}
+imputed<-read.csv("C:/Users/Mark/Documents/CSV/sgn_air_imputed.CSV")[,c(2,3)]
+#This line counts the number of instances where AQI > 100
+length(which(imputed[,1] > 100))
+```
+
+4059 hours over 2 years, which breaks down to $\approx 84.5$ days a year.
+
+To see if there's any clear trends, let's next plot the AQI across the 2017 year.
+
+```{r}
+plot(imputed[,1], type = 'l')
+```
+
+Unsuprisingly, this plot does not show us all that much.  Next, I will perform a decomposition of this time-series data.
+
+```{r}
+imputed.ts<-ts(imputed,frequency = 8760, start = 998)
+stl(imputed[,1], s.window = "periodic")
+```
